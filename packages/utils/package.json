@@ -1,0 +1,19 @@
+{
+  "name": "@lyle-cli-dev/utils",
+  "version": "1.0.0",
+  "description": "lyle-cli-dev utils",
+  "author": "lyleXX <740334078@qq.com>",
+  "homepage": "",
+  "license": "ISC",
+  "main": "lib/utils.js",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "test": "echo \" utils \""
+  }
+}
