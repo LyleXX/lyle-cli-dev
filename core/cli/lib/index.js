@@ -7,11 +7,15 @@ const semver = require('semver')
 const colors = require('colors/safe')
 const userHome = require('user-home')
 const pathExists = require('path-exists').sync
+const commander = require('commander')
 const log = require('@lyle-cli-dev/log')
+const init =  require('@lyle-cli-dev/init')
 
 const constant = require('./const')
 const pkg = require('../package.json')
 let args
+
+const program = new commander.Command()
 
 async function core() {
   try {
@@ -22,9 +26,51 @@ async function core() {
     checkInputArgs()
     checkEnv()
     await checkGlobalUpdate()
+    registerCommand()
   } catch (e) {
     log.error(e.message)
   }
+}
+
+function registerCommand(){
+  program
+      .name(Object.keys((pkg.bin))[0])
+      .usage('<command> [options]')
+      .version(pkg.version)
+      .option('-d, --debug', '是否开启调试模式', false)
+
+  program
+      .command('init [projectName]')
+      .option('-f, --force', '是否强制初始化项目')
+      .action(init)
+
+  // 开启debug模式
+  program.on('option:debug',function (){
+    if(program.debug){
+      process.env.LOG_LEVEL = 'verbose'
+    }else{
+      process.env.LOG_LEVEL = 'info'
+    }
+    log.level = process.env.LOG_LEVEL
+  })
+
+  // 对未知命令监听
+  program.on('command:*',function(obj){
+    const availableCommands = program.commands.map(cmd => cmd.name())
+    console.log(colors.red('未知的命令：' + obj[0]))
+    if(availableCommands.length){
+      console.log(colors.red('可用命令：' + availableCommands.join(',')))
+    }
+  })
+
+
+
+  if(program.args && program.args.length < 1){
+    program.outputHelp()
+    console.log()
+  }
+
+  program.parse(process.argv)
 }
 
 async function checkGlobalUpdate() {
