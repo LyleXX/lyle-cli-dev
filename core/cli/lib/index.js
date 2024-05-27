@@ -10,6 +10,7 @@ const pathExists = require('path-exists').sync
 const commander = require('commander')
 const log = require('@lyle-cli-dev/log')
 const init =  require('@lyle-cli-dev/init')
+const exec = require('@lyle-cli-dev/exec')
 
 const constant = require('./const')
 const pkg = require('../package.json')
@@ -19,13 +20,7 @@ const program = new commander.Command()
 
 async function core() {
   try {
-    checkPkgVersion()
-    checkNodeVersion()
-    checkRoot()
-    checkUserHome()
-    checkInputArgs()
-    checkEnv()
-    await checkGlobalUpdate()
+    await prepare()
     registerCommand()
   } catch (e) {
     log.error(e.message)
@@ -38,11 +33,12 @@ function registerCommand(){
       .usage('<command> [options]')
       .version(pkg.version)
       .option('-d, --debug', '是否开启调试模式', false)
+      .option('-tp --targetPath <targetPath>','是否指定本地调试文件路径','')
 
   program
       .command('init [projectName]')
       .option('-f, --force', '是否强制初始化项目')
-      .action(init)
+      .action(exec)
 
   // 开启debug模式
   program.on('option:debug',function (){
@@ -52,6 +48,11 @@ function registerCommand(){
       process.env.LOG_LEVEL = 'info'
     }
     log.level = process.env.LOG_LEVEL
+  })
+
+  //  指定targetPath
+  program.on('option:targetPath',function (){
+    process.env.CLI_TARGET_PATH = program.targetPath
   })
 
   // 对未知命令监听
@@ -71,6 +72,16 @@ function registerCommand(){
   }
 
   program.parse(process.argv)
+}
+
+async function prepare(){
+  checkPkgVersion()
+  checkNodeVersion()
+  checkRoot()
+  checkUserHome()
+  // checkInputArgs()
+  checkEnv()
+  await checkGlobalUpdate()
 }
 
 async function checkGlobalUpdate() {
@@ -101,7 +112,6 @@ function checkEnv() {
     })
   }
   createDefaultConfig()
-  log.verbose('环境变量', process.env.CLI_HOME_PATH)
 }
 
 function createDefaultConfig() {
@@ -116,20 +126,21 @@ function createDefaultConfig() {
   process.env.CLI_HOME_PATH = cliConfig.cliHome
 }
 
-function checkInputArgs() {
-  const minimist = require('minimist')
-  args = minimist(process.argv.slice(2))
-  checkArgs()
-}
+// 参数检查，使用commander替代
+// function checkInputArgs() {
+//   const minimist = require('minimist')
+//   args = minimist(process.argv.slice(2))
+//   checkArgs()
+// }
 
-function checkArgs() {
-  if (args.debug) {
-    process.env.LOG_LEVEL = 'verbose'
-  } else {
-    process.env.LOG_LEVEL = 'info'
-  }
-  log.level = process.env.LOG_LEVEL
-}
+// function checkArgs() {
+//   if (args.debug) {
+//     process.env.LOG_LEVEL = 'verbose'
+//   } else {
+//     process.env.LOG_LEVEL = 'info'
+//   }
+//   log.level = process.env.LOG_LEVEL
+// }
 
 function checkUserHome() {
   if (!userHome || !pathExists(userHome)) {

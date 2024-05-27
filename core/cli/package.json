@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@lyle-cli-dev/get-npm-info": "file:../../utils/get-npm-info",
+    "@lyle-cli-dev/exec": "file:../exec",
     "@lyle-cli-dev/log": "file:../../utils/log",
     "@lyle-cli-dev/init": "file:../../commands/init",
     "colors": "^1.4.0",
