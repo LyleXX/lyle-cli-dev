@@ -27,8 +27,11 @@
     "url": "https://github.com/LyleXX/lyle-cli-dev/issues"
   },
   "dependencies": {
-    "@lyle-cli-dev/utils": "file:../../utils/utils",
     "@lyle-cli-dev/format-path": "file:../../utils/format-path",
+    "@lyle-cli-dev/get-npm-info": "file:../../utils/get-npm-info",
+    "@lyle-cli-dev/utils": "file:../../utils/utils",
+    "npminstall": "^4.10.0",
+    "path-exists": "^4.0.0",
     "pkg-dir": "^5.0.0"
   }
 }
