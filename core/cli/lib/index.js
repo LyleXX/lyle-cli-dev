@@ -9,7 +9,6 @@ const userHome = require('user-home')
 const pathExists = require('path-exists').sync
 const commander = require('commander')
 const log = require('@lyle-cli-dev/log')
-const init =  require('@lyle-cli-dev/init')
 const exec = require('@lyle-cli-dev/exec')
 
 const constant = require('./const')
@@ -79,7 +78,6 @@ function registerCommand(){
 
 async function prepare(){
   checkPkgVersion()
-  checkNodeVersion()
   checkRoot()
   checkUserHome()
   // checkInputArgs()
@@ -156,17 +154,6 @@ function checkRoot() {
   rootCheck()
 }
 
-function checkNodeVersion() {
-  // 第一步，获取当前node版本
-  const currentVersion = process.version
-  // 第二步，比对最低版本
-  const lowestVersion = constant.LOWEST_NODE_VERSION
-  if (!semver.gt(currentVersion, lowestVersion)) {
-    throw new Error(
-      colors.red(`lyle-cli 需要安装 v${lowestVersion} 以上版本的 Node.js`)
-    )
-  }
-}
 
 function checkPkgVersion() {
   log.info('cli', pkg.version)
