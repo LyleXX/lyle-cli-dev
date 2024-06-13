@@ -1,7 +1,7 @@
 {
-  "name": "@imooc-cli-dev/init",
+  "name": "@lyle-cli-dev/request",
   "version": "1.0.0",
-  "description": "lyle-cli-dev init",
+  "description": "> TODO: description",
   "author": "LyleXX <740334078@qq.com>",
   "homepage": "https://github.com/LyleXX/lyle-cli-dev#readme",
   "license": "ISC",
@@ -27,11 +27,6 @@
     "url": "https://github.com/LyleXX/lyle-cli-dev/issues"
   },
   "dependencies": {
-    "@lyle-cli-dev/command": "file:../../models/command",
-    "@lyle-cli-dev/log": "file:../../utils/log",
-    "@lyle-cli-dev/request": "file:../../utils/request",
-    "fs-extra": "9.0.1",
-    "inquirer": "7.3.3",
-    "semver": "^7.6.2"
+    "axios": "^1.7.2"
   }
 }
