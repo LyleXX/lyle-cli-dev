@@ -29,11 +29,14 @@
   "dependencies": {
     "@lyle-cli-dev/command": "file:../../models/command",
     "@lyle-cli-dev/log": "file:../../utils/log",
+    "@lyle-cli-dev/package": "file:../../models/package",
     "@lyle-cli-dev/request": "file:../../utils/request",
     "@lyle-cli-dev/utils": "file:../../utils/utils",
-    "@lyle-cli-dev/package": "file:../../models/package",
+    "ejs": "^3.1.5",
     "fs-extra": "9.0.1",
+    "glob": "^7.1.6",
     "inquirer": "7.3.3",
+    "kebab-case": "^1.0.2",
     "semver": "^7.6.2",
     "user-home": "2.0.0"
   }

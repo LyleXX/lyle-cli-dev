@@ -9,12 +9,19 @@ const fs = require('fs')
 const inquirer = require('inquirer')
 const fse = require('fs-extra')
 const semver = require('semver')
-const { spinnerStart, sleep } = require('@lyle-cli-dev/utils')
+const glob = require('glob')
+const ejs = require('ejs')
+const { spinnerStart, sleep, execAsync } = require('@lyle-cli-dev/utils')
 
 const getProjectTemplate = require('./getProjectTemplate')
 
 const TYPE_PROJECT = 'project'
 const TYPE_COMPONENT = 'component'
+
+const TEMPLATE_TYPE_NORMAL = 'normal'
+const TEMPLATE_TYPE_CUSTOM = 'custom'
+
+const WHITE_COMMAND = ['npm', 'cnpm', 'pnpm']
 
 class InitCommand extends Command {
   init() {
@@ -34,9 +41,151 @@ class InitCommand extends Command {
         this.projectInfo = projectInfo
         await this.downloadTemplate()
         // 3. 安装模板
+        await this.installTemplate()
       }
     } catch (e) {
       log.error(e.message)
+      if (process.env.LOG_LEVEL === 'verbose') {
+        console.log(e)
+      }
+    }
+  }
+
+  async installTemplate() {
+    if (this.templateInfo) {
+      if (!this.templateInfo.type) {
+        this.templateInfo.type = TEMPLATE_TYPE_NORMAL
+      }
+      if (this.templateInfo.type === TEMPLATE_TYPE_NORMAL) {
+        // 标准安装
+        await this.installNormalTemplate()
+      } else if (this.templateInfo.type === TEMPLATE_TYPE_CUSTOM) {
+        // 自定义安装
+        await this.installCustomTemplate()
+      } else {
+        throw new Error('项目模板信息类型无法识别')
+      }
+    } else {
+      throw new Error('项目模板信息不存在')
+    }
+  }
+
+  async ejsRender(options) {
+    const dir = process.cwd()
+    const projectInfo = this.projectInfo
+    return new Promise((resolve, reject) => {
+      glob(
+        '**',
+        {
+          cwd: dir,
+          ignore: options.ignore || '',
+          nodir: true
+        },
+        (err, files) => {
+          if (err) {
+            reject(err)
+          }
+          Promise.all(
+            files.map(file => {
+              const filePath = path.join(dir, file)
+              return new Promise((resolve1, reject1) => {
+                ejs.renderFile(filePath, projectInfo, {}, (err, result) => {
+                  if (err) {
+                    reject1(err)
+                  } else {
+                    fse.writeFileSync(filePath, result)
+                    resolve1(result)
+                  }
+                })
+              })
+            })
+          )
+            .then(() => {
+              resolve()
+            })
+            .catch(e => {
+              reject(e)
+            })
+        }
+      )
+    })
+  }
+
+  async installNormalTemplate() {
+    let spinner = spinnerStart('正在安装模板...')
+    await sleep()
+    try {
+      // 1. 拷贝模板代码到当前目录
+      const templatePath = path.resolve(
+        this.templateNpm.cacheFilePath,
+        'template'
+      )
+      const targetPath = process.cwd()
+      fse.ensureDirSync(templatePath)
+      fse.ensureDirSync(targetPath)
+      fse.copySync(templatePath, targetPath)
+    } catch (e) {
+      throw e
+    } finally {
+      spinner.stop(true)
+      log.success('模板安装成功')
+    }
+    const templateIgnore = this.templateInfo.ignore || []
+    const ignore = ['node_modules/**', ...templateIgnore]
+    await this.ejsRender({ ignore })
+    // 2. 依赖安装
+    const { installCommand, startCommand } = this.templateInfo
+    await this.execCommand(installCommand, '依赖安装过程失败')
+    // 3，启动命令执行
+    await this.execCommand(startCommand, '启动命令执行失败')
+  }
+
+  checkCommand(cmd) {
+    if (WHITE_COMMAND.includes(cmd)) {
+      return cmd
+    }
+    return null
+  }
+
+  async execCommand(command, errMsg) {
+    let ret
+    if (command) {
+      const cmdArray = command.split(' ')
+      const cmd = this.checkCommand(cmdArray[0])
+      if (!cmd) {
+        throw new Error('命令不存在！m命令：' + command)
+      }
+      const args = cmdArray.slice(1)
+      ret = await execAsync(cmd, args, {
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
+      if (ret !== 0) {
+        throw new Error(errMsg)
+      }
+      return ret
+    }
+  }
+
+  async installCustomTemplate() {
+    // 查询自定义模版的入口文件
+    if (await this.templateNpm.exists()) {
+      const rootFile = this.templateNpm.getRootFile()
+      if (fs.existsSync(rootFile)) {
+        log.notice('开始执行自定义模板')
+        const options = {
+          ...this.projectInfo,
+          cwd: process.cwd()
+        }
+        const code = `require('${rootFile}')(${JSON.stringify(options)})`
+        execAsync('node', ['-e', code], {
+          stdio: 'inherit',
+          cwd: process.cwd()
+        })
+        log.success('自定义模板安装成功')
+      } else {
+        throw new Error('自定义模板入口文件不存在')
+      }
     }
   }
 
@@ -54,6 +203,8 @@ class InitCommand extends Command {
       'node_modules'
     )
     const { npmName, version } = templateInfo
+    this.templateInfo = templateInfo
+    console.log('templateInfo', templateInfo)
     const templateNpm = new Package({
       targetPath,
       storeDir,
@@ -65,11 +216,14 @@ class InitCommand extends Command {
       await sleep()
       try {
         await templateNpm.install()
-        log.success('下载模板成功')
       } catch (e) {
         throw e
       } finally {
         spinner.stop(true)
+        if (await templateNpm.exists()) {
+          log.success('下载模板成功')
+          this.templateNpm = templateNpm
+        }
       }
       await templateNpm.install()
     } else {
@@ -77,11 +231,14 @@ class InitCommand extends Command {
       await sleep()
       try {
         await templateNpm.update()
-        log.success('更新模板成功')
       } catch (e) {
         throw e
       } finally {
         spinner.stop(true)
+        if (await templateNpm.exists()) {
+          log.success('更新模板成功')
+          this.templateNpm = templateNpm
+        }
       }
     }
     // 1.1 通过egg.js搭建一套后端系统
@@ -134,7 +291,17 @@ class InitCommand extends Command {
   }
 
   async getProjectInfo() {
+    function isValidName(v) {
+      return /^[a-zA-z]+([-][a-zA-Z][a-zA-Z0-9]*|[_][a-zA-Z][a-zA-Z0-9]*|[a-zA-Z0-9])*$/.test(
+        v
+      )
+    }
     let projectInfo = {}
+    let isProjectNameValid = false
+    if (isValidName(this.projectName)) {
+      isProjectNameValid = true
+      projectInfo.projectName = this.projectName
+    }
     // 1. 选择创建或者组件
     const { type } = await inquirer.prompt({
       type: 'list',
@@ -153,76 +320,121 @@ class InitCommand extends Command {
       ]
     })
     log.verbose('type', type)
-    if (type === TYPE_PROJECT) {
-      // 2. 获取项目基本信息
-      const project = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'projectName',
-          message: '请输入项目名称',
-          default: '',
-          validate: function (v) {
-            // 1. 输入的首字符必须为英文字符
-            // 2. 尾字符必须为英文或者数字
-            // 3. 字符只允许"-_"
+    this.template = this.template.filter(template =>
+      template.tag.includes(type)
+    )
+    const title = type === TYPE_PROJECT ? '项目' : '组件'
 
-            // 合法：a,a-b.a_b,a_b-c,a-b1-c1,a_b1-c1
-            // 不合法：1,  a_, a- , a_1, a-1
+    const projectNamePrompt = {
+      type: 'input',
+      name: 'projectName',
+      message: `请输入${title}名称`,
+      default: '',
+      validate: function (v) {
+        // 1. 输入的首字符必须为英文字符
+        // 2. 尾字符必须为英文或者数字
+        // 3. 字符只允许"-_"
 
-            const done = this.async()
-            setTimeout(function () {
-              if (
-                !/^[a-zA-z]+([-][a-zA-Z][a-zA-Z0-9]*|[_][a-zA-Z][a-zA-Z0-9]*|[a-zA-Z0-9])*$/.test(
-                  v
-                )
-              ) {
-                done('项目名称不符合规范，请重新输入')
-              } else {
-                done(null, true)
-              }
-            }, 0)
-          },
-          filter: function (v) {
+        // 合法：a,a-b.a_b,a_b-c,a-b1-c1,a_b1-c1
+        // 不合法：1,  a_, a- , a_1, a-1
+
+        const done = this.async()
+        setTimeout(function () {
+          if (!isValidName(v)) {
+            done(`${title}名称不符合规范，请重新输入`)
+          } else {
+            done(null, true)
+          }
+        }, 0)
+      },
+      filter: function (v) {
+        return v
+      }
+    }
+    const projectPrompt = []
+    if (!isProjectNameValid) {
+      projectPrompt.push(projectNamePrompt)
+    }
+    projectPrompt.push(
+      {
+        type: 'input',
+        name: 'projectVersion',
+        message: `请输入${title}版本号`,
+        default: '1.0.0',
+        validate: function (v) {
+          const done = this.async()
+          setTimeout(function () {
+            if (!!!semver.valid(v)) {
+              done(`${title}版本号不符合规范，请重新输入`)
+            } else {
+              done(null, true)
+            }
+          }, 0)
+        },
+        filter: function (v) {
+          if (!!semver.valid(v)) {
+            return semver.valid(v)
+          } else {
             return v
           }
-        },
-        {
-          type: 'input',
-          name: 'projectVersion',
-          message: '请输入项目版本号',
-          default: '1.0.0',
-          validate: function (v) {
-            const done = this.async()
-            setTimeout(function () {
-              if (!!!semver.valid(v)) {
-                done('项目版本号不符合规范，请重新输入')
-              } else {
-                done(null, true)
-              }
-            }, 0)
-          },
-          filter: function (v) {
-            if (!!semver.valid(v)) {
-              return semver.valid(v)
-            } else {
-              return v
-            }
-          }
-        },
-        {
-          type: 'list',
-          name: 'projectTemplate',
-          message: '请选择项目模板',
-          choices: this.createTemplateChoice()
         }
-      ])
+      },
+      {
+        type: 'list',
+        name: 'projectTemplate',
+        message: `请选择${title}模板`,
+        choices: this.createTemplateChoice()
+      }
+    )
+    if (type === TYPE_PROJECT) {
+      // 2. 获取项目基本信息
+      const project = await inquirer.prompt(projectPrompt)
       projectInfo = {
+        ...projectInfo,
         type,
         ...project
       }
     } else {
+      const descriptionPrompt = {
+        type: 'input',
+        name: 'componentDescription',
+        message: '请输入组件描述信息',
+        default: '',
+        validate: function (v) {
+          const done = this.async()
+          setTimeout(function () {
+            if (!v) {
+              done('组件描述信息不能为空')
+            } else {
+              done(null, true)
+            }
+          }, 0)
+        }
+      }
+      projectPrompt.push(descriptionPrompt)
+      // 2. 获取组件基本信息
+      const component = await inquirer.prompt(projectPrompt)
+      projectInfo = {
+        ...projectInfo,
+        type,
+        ...component
+      }
     }
     // return 项目的基本信息(object)
+
+    // AbcEfg => abc-efg 生成className
+    if (projectInfo.projectName) {
+      projectInfo.name = projectInfo.projectName
+      projectInfo.className = require('kebab-case')(
+        projectInfo.projectName
+      ).replace('-', '')
+    }
+    if (projectInfo.projectVersion) {
+      projectInfo.version = projectInfo.projectVersion
+    }
+    if (projectInfo.componentDescription) {
+      projectInfo.description = projectInfo.componentDescription
+    }
     return projectInfo
   }
 

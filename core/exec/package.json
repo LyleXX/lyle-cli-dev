@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@lyle-cli-dev/package": "file:../../models/package",
-    "@lyle-cli-dev/log": "file:../../utils/log"
+    "@lyle-cli-dev/log": "file:../../utils/log",
+    "@lyle-cli-dev/utils": "file:../../utils/utils"
+
   }
 }
