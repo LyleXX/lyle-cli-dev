@@ -173,9 +173,15 @@ class InitCommand extends Command {
       const rootFile = this.templateNpm.getRootFile()
       if (fs.existsSync(rootFile)) {
         log.notice('开始执行自定义模板')
+        const templatePath = path.resolve(
+          this.templateNpm.cacheFilePath,
+          'template'
+        )
         const options = {
-          ...this.projectInfo,
-          cwd: process.cwd()
+          projectInfo: this.projectInfo,
+          templateInfo: this.templateInfo,
+          sourcePath: templatePath,
+          targetPath: process.cwd()
         }
         const code = `require('${rootFile}')(${JSON.stringify(options)})`
         execAsync('node', ['-e', code], {
